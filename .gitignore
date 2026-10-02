@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Environment variables
+.env
+
+# Airflow
+airflow/logs/
+airflow/*.db
+airflow/airflow.cfg
+airflow/simple_auth_manager_passwords.json.generated
+
+# Data
+data/raw/*
+data/processed/*
+
+# IDE
+.vscode/
+
+# Node
+node_modules/
+frontend/dist/
+
+# OS
+.DS_Store
+Thumbs.db
