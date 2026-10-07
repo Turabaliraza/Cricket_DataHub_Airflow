@@ -9,6 +9,7 @@
 CREATE TABLE tournaments (
     tournament_id SERIAL PRIMARY KEY,
 
+    external_tournament_id VARCHAR(50) UNIQUE,
     name VARCHAR(100) NOT NULL,
     year INTEGER NOT NULL,
     format VARCHAR(20) NOT NULL
@@ -22,6 +23,7 @@ CREATE TABLE tournaments (
 CREATE TABLE teams (
     team_id SERIAL PRIMARY KEY,
 
+    external_team_id VARCHAR(50) UNIQUE,
     name VARCHAR(100) NOT NULL,
     country VARCHAR(100) NOT NULL
 );
