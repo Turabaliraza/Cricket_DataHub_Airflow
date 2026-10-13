@@ -1,6 +1,11 @@
 import pendulum
+import subprocess
+import sys
+from pathlib import Path
 
 from airflow.sdk import dag, task
+
+PROJECT_ROOT=Path(__file__).resolve().parents[2]
 
 @dag(
     schedule=None,
@@ -9,29 +14,50 @@ from airflow.sdk import dag, task
     tags=["cricket_datahub","learning"],
 )
 def cricket_datahub_first_dag():
-    """ 
-    First DAG for the Cricket DataHub project.
 
-    The DAG demonstrates the basic Airflow workflow structure:
-    Start->Process->Finish
+    """
+    Cricket DataHub pipeline.
+
+    Start -> Extract, Transform and Load -> Finish
     """
 
     @task
     def start_pipeline():
-       print("Cricket DataHub Pipeline Started.")
+        print("Cricket DataHub Pipeline Started.")
 
     @task
     def process_data():
-        print("processing cricket data...")
+        scripts=[
+            ("Extract",PROJECT_ROOT/"data"/"extract_espn.py"),
+            ("Transform and Load", PROJECT_ROOT/"data"/"load_postgres.py"),
+        ]
 
+        for step_name, script_path in scripts:
+            print(f"Starting {step_name} step...")
+
+            result = subprocess.run(
+                [sys.executable, str(script_path)],
+                cwd=str(PROJECT_ROOT),
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            if result.stdout:
+                print(result.stdout)
+
+            if result.stderr:
+                print(f"{step_name}messages:")
+                print(result.stderr)
+            print(f"{step_name} step completed successfully.")
     @task
     def finish_pipeline():
-        print("Cricket DataHub Pipeline Finished.") 
+        print("Cricket DataHub Pipeline Finished.")
 
     start=start_pipeline()
     process=process_data()
     finish=finish_pipeline()
 
-    start >> process >> finish
+    start>>process>>finish
 
 cricket_datahub_first_dag()
