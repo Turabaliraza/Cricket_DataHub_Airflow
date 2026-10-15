@@ -1,4 +1,3 @@
-
 import os
 
 import psycopg2
@@ -59,6 +58,7 @@ def load_tournament(connection, tournament):
                 tournament["format"],
             ),
         )
+
         tournament_id = cursor.fetchone()[0]
 
     return tournament_id
@@ -172,6 +172,7 @@ def load_player_teams(
             player_id = player_id_map[
                 player_team["external_player_id"]
             ]
+
             team_id = team_id_map[
                 player_team["external_team_id"]
             ]
@@ -268,6 +269,7 @@ def load_match_teams(connection, match_id, team_ids):
                 query,
                 (match_id, team["team_id"]),
             )
+
             loaded_count += 1
 
     return loaded_count
@@ -300,6 +302,10 @@ def load_innings(connection, innings_data, match_id, team_ids):
 
     with connection.cursor() as cursor:
         for innings in innings_data:
+            # Skip innings records that have no score data.
+            if innings["runs"] is None:
+                continue
+
             team_id = team_id_map[
                 innings["external_team_id"]
             ]
@@ -376,7 +382,6 @@ def load_player_performances(
 
     with connection.cursor() as cursor:
         # Remove old performance records for this match.
-        # The deletion is rolled back if the overall pipeline fails.
         cursor.execute(
             """
             DELETE FROM player_performance pp
@@ -453,7 +458,25 @@ if __name__ == "__main__":
     teams = transform_teams(data)
     players = transform_players(data)
     player_teams = transform_player_teams(data)
+
     innings_data = transform_innings(data)
+
+    # Keep only actual batting innings identified by ESPN.
+    batting_innings = {
+        (str(competitor["team"]["id"]), linescore["period"])
+        for competitor in data["header"]["competitions"][0]["competitors"]
+        for linescore in competitor.get("linescores", [])
+        if linescore.get("isBatting") is True
+    }
+
+    innings_data = [
+        innings
+        for innings in innings_data
+        if (
+            str(innings["external_team_id"]),
+            innings["innings_number"],
+        ) in batting_innings
+    ]
 
     performance_data = transform_player_performance(data)
     performance_data = merge_player_performances(performance_data)
@@ -514,6 +537,29 @@ if __name__ == "__main__":
             match_team_count,
         )
 
+        # Delete old performances before deleting existing innings.
+        # Both operations are inside the transaction and can be rolled back.
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                DELETE FROM player_performance
+                WHERE innings_id IN (
+                    SELECT innings_id
+                    FROM innings
+                    WHERE match_id = %s
+                );
+                """,
+                (match_id,),
+            )
+
+            cursor.execute(
+                """
+                DELETE FROM innings
+                WHERE match_id = %s;
+                """,
+                (match_id,),
+            )
+
         innings_count = load_innings(
             connection,
             innings_data,
@@ -536,6 +582,7 @@ if __name__ == "__main__":
         print("Total performances processed:", performance_count)
 
         connection.commit()
+
         print("Database transaction committed successfully.")
 
     except Exception:
